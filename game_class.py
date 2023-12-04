@@ -86,7 +86,6 @@ class MancalaGame:
         self.board[1][7] = 0
         self.board[2][7] = "Player 2\n  You"
 
-
     def leaderboard_display(self, final_points, game_over) -> None:
         leaderboard_ui = LeaderboardUI()
         return leaderboard_ui.show_leaderboard_options(final_points, game_over)
@@ -372,7 +371,3 @@ class MancalaGame:
         self.board.cursor = None
         self.board.print(f"Player {player} wins! \n Press 'r' to restart, 'q' to quit or 'l' to see the leaderboard")
         return None
-
-# SOME NOTES
-# The time complexities for stone
-# 6. We need to add the stone images to the board (so layer the stones instead of the numbers)
