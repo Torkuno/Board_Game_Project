@@ -1,8 +1,10 @@
-import time
-import traceback
+from tkinter import simpledialog
 from game2dboard import Board
 from leaderboard import LeaderboardUI
+from rock_stack import *
+import traceback
 import copy
+import os
 
 ROWS = 4
 COLUMNS = 8
@@ -34,21 +36,28 @@ class TreeNode:
 class MancalaGame:
 
     def __init__(self):
+        self.username = simpledialog.askstring("Name for Leaderboard", "Enter your name for the leaderboard")
         self.current_player = None
         self.board = Board(ROWS, COLUMNS)
         self.board.title = "The Mancala Game"
+
         self.board.cell_size = CELL_SIZE
         self.board.cell_spacing = CELL_SPACING
         self.board.margin = 0
-        self.board.background_image = "mancala_board.png"
+        self.board.background_image = "mancala_board"
+
         if not self.board.background_image:
             self.board.cell_color = COLOR
         self.board.create_output(background_color="black", color="bisque", font_size=12)
+
+        self.round_counter = 0
         self.board.on_start = self.start
         self.board.on_key_press = self.keyboard_command
         self.board.on_mouse_click = self.mouse_click
         self.board_dictionary = {}
+        self.fastmode = 0
         self.board.cursor = "arrow"
+        self.img_cleanup()
 
     def start(self) -> None:
         """ Initializes the game.
@@ -69,8 +78,16 @@ class MancalaGame:
             "Row_2": [4, 4, 4, 4, 4, 4],
             "Player1_score": 0,
             "Player2_score": 0,
-                }
+        }
 
+
+    def img_cleanup(self):
+        for filename in os.listdir('img/rocks'):
+            file_path = os.path.join('img/rocks', filename)
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+
+                
     def initialise_board_ui(self):
         """ We initialise the state of the board's user interface
         Input: None
@@ -78,18 +95,18 @@ class MancalaGame:
         Time complexity: O(1)"""
         for row in range(1, 3):
             for col in range(1, 7):
-                self.board[row][col] = 4
+                self.board[row][col] = stack_images(4, row, col, "X", self.board)
 
         # Set player's homes
-        self.board[1][0] = "Player 1"
-        self.board[2][0] = 0
-        self.board[1][7] = 0
-        self.board[2][7] = "Player 2\n  You"
+        self.board[1][0] = create_string("Bot", 'player_1')
+        self.board[2][0] = create_string("0", 'default_2_0')
+        self.board[1][7] = create_string("0", 'default_1_7')
+        self.board[2][7] = create_string(self.username, 'player_2')
 
 
     def leaderboard_display(self, final_points, game_over) -> None:
         leaderboard_ui = LeaderboardUI()
-        return leaderboard_ui.show_leaderboard_options(final_points, game_over)
+        return leaderboard_ui.show_leaderboard_options(final_points, game_over, self.username)
 
 
     def keyboard_command(self, key) -> None:
@@ -105,6 +122,13 @@ class MancalaGame:
                 self.start()
             elif key == "l":
                 self.leaderboard_display(self.board_dictionary[f"Player{self.current_player}_score"], self.check_game_over())
+            elif key == "f":
+                if self.fastmode == 0:
+                    self.fastmode = 1
+                    self.board.print("Fastmode activated")
+                else:
+                    self.fastmode = 0
+                    self.board.print("Fastmode deactivated")
         except Exception as e:
             print(f"An error occurred: {e}", traceback.format_exc())
 
@@ -128,6 +152,7 @@ class MancalaGame:
         else:
             self.board.cursor = "arrow"
 
+
     def mouse_click(self, btn: int, row: int, col: int) -> None:
         """ Handles mouse clicks
         Input: btn, row clicked, col clicked
@@ -138,7 +163,7 @@ class MancalaGame:
             try:
                 # Handle Player 1's turn
                 if self.current_player == 1:
-                    time.sleep(4)
+                    if self.fastmode == 0: self.board.pause(3000)
                     self.board.cursor = None
                     return self.moving_stones(row, col)
 
@@ -160,11 +185,13 @@ class MancalaGame:
         run.start()
         return None
 
+
     def moving_stones(self, row: int, col: int) -> None:
         """ Moves stones around the board:
         Input: row of chosen cell, column  of chosen cell
         Output: None. Calls the board_update method
         Time complexity: O(n) """
+        self.img_cleanup()
         try:
             col -= 1
             start_row, start_col = row, col
@@ -203,7 +230,6 @@ class MancalaGame:
                 return self.current_player_update(last_row, last_col)
             else:
                 return self.board_update(self.board_dictionary)
-
         except Exception as e:
             print(f"An error occurred: {e}", traceback.format_exc())
 
@@ -213,10 +239,12 @@ class MancalaGame:
         Output: None
         Time complexity: O(n) """
         for col in range(1, 7):
-            self.board[1][COLUMNS - col - 1] = board_dictionary["Row_1"][col - 1]
-            self.board[2][col] = board_dictionary["Row_2"][col - 1]
-        self.board[1][7] = board_dictionary["Player2_score"]
-        self.board[2][0] = board_dictionary["Player1_score"]
+            self.board[1][COLUMNS - col - 1] = stack_images(board_dictionary["Row_1"][col - 1], 1, COLUMNS - col - 1, self.round_counter, self.board)
+            self.board[2][col] = stack_images(board_dictionary["Row_2"][col - 1], 2, col, self.round_counter, self.board)
+        self.board[1][7] = stack_images(board_dictionary["Player2_score"], 1, 7, self.round_counter, self.board)
+        self.board[2][0] = stack_images(board_dictionary["Player1_score"], 2, 0, self.round_counter, self.board)
+        self.round_counter += 1
+
 
     def ai_player(self) -> (int, int):
         """ This method is the AI player
@@ -225,6 +253,7 @@ class MancalaGame:
         Time complexity: O(b^d) where b is the branching factor and d is the depth of the tree"""
         root = TreeNode(None)  # we create a root node
         return self.make_best_move(root, self.current_player, 3)
+
 
     def make_best_move(self, root, player_to_evaluate, depth) -> (int, int):
         """ This method makes the best move
@@ -250,15 +279,19 @@ class MancalaGame:
             if total_score > best_score:
                 best_score = total_score
                 best_move = move
-
         return best_move
+
 
     def possible_moves_by_player(self, player_to_evaluate) -> list:
         """ This method returns the possible moves by player
         Input: player_to_evaluate
         Output: list
         Time complexity: O(1)"""
-        return [(player_to_evaluate, col) for col in range(6)]
+        values = []
+        for col in range(6):
+            values.append((player_to_evaluate, col))
+        return values
+
 
     def evaluate_move(self, root, player_to_evaluate, move, depth) -> int:
         """ This method evaluates the move
@@ -299,8 +332,10 @@ class MancalaGame:
         self.stone_capture(move[0], move[1], last_row, last_col, dictionary_copy)
 
         # Create nodes
-        points = -points if player_to_evaluate != self.current_player else points
-        root.children.append(TreeNode(player_to_evaluate, points, move))
+        if player_to_evaluate == self.current_player:
+            root.children.append(TreeNode(player_to_evaluate, points, move))
+        else:
+            root.children.append(TreeNode(player_to_evaluate, -points, move))
 
         # Check if recursion should continue
         if depth > 0:
@@ -309,6 +344,7 @@ class MancalaGame:
 
         return points
 
+      
     def stone_capture(self, start_row: int, start_col: int, last_row: int, last_col: int, dictionary: dict) -> None:
         """ Checks if we can capture stones by checking if we land in an empty pit on our side
         Input: starting row, starting column, last row, last column, dictionary
@@ -316,8 +352,8 @@ class MancalaGame:
         Time complexity: O(1) """
         if start_row == last_row and start_col != last_col and dictionary[f"Row_{last_row}"][last_col] == 1:
             dictionary[f"Row_{last_row}"][last_col] += dictionary[f"Row_{3 - last_row}"][last_col]
-            dictionary[f"Row_{3 - last_row}"][last_col] = 0
         return None
+
 
     def current_player_update(self, last_row: int, last_col: int) -> None:
         """ Updates the current player based on the last move
@@ -361,10 +397,7 @@ class MancalaGame:
         Time complexity: O(1) """
         self.board_update(self.board_dictionary)
         self.board.cursor = None
-        self.board.print(f"Player {player} wins! \n Press 'r' to restart, 'q' to quit or 'l' to see the leaderboard")
+        final_message = "[r] - Restart           [q] - Quit           [l] - Leaderboard"
+        if player == 2: self.board.print(f"{self.username} wins!\n{final_message}")
+        else: self.board.print(f"The Bot wins!\n{final_message}")
         return None
-
-# SOME NOTES
-# The time complexities for stone
-# Handle draws
-# 6. We need to add the stone images to the board (so layer the stones instead of the numbers)
